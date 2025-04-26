@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
 const Attendance = () => {
   const [location, setLocation] = useState(null);
-  const [selfie, setSelfie] = useState(null);
-  const [preview, setPreview] = useState(null);
-  const [modalOpen, setModalOpen] = useState(false);
+  const [captured, setCaptured] = useState(false);
   const [status, setStatus] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
 
   const getLocation = () => {
     setLocation(null); // reset previous location
@@ -30,15 +32,28 @@ const Attendance = () => {
 
   useEffect(() => {
     getLocation();
+    startCamera();
   }, []);
 
-  const handleSelfieChange = (e) => {
-    const file = e.target.files[0];
-    setSelfie(file);
-    if (file) {
-      setPreview(URL.createObjectURL(file));
-    } else {
-      setPreview(null);
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("Error accessing webcam:", err);
+    }
+  };
+
+  const captureSelfie = () => {
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    if (canvas && video) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d").drawImage(video, 0, 0);
+      setCaptured(true);
     }
   };
 
@@ -47,15 +62,18 @@ const Attendance = () => {
       setStatus("📍 Location not available. Please enable location services.");
       return;
     }
-    if (!selfie) {
-      setStatus("📸 Please upload a selfie to continue.");
+    if (!captured) {
+      setStatus("📸 Please capture a selfie to continue.");
       return;
     }
+
+    const canvas = canvasRef.current;
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg"));
 
     const formData = new FormData();
     formData.append("latitude", location.latitude);
     formData.append("longitude", location.longitude);
-    formData.append("selfie", selfie);
+    formData.append("selfie", blob, "selfie.jpg");
 
     try {
       const res = await axios.post(
@@ -69,8 +87,7 @@ const Attendance = () => {
         }
       );
       setStatus(res.data.message + (res.data.location ? ` (${res.data.location})` : ""));
-      setSelfie(null);
-      setPreview(null);
+      setCaptured(false);
     } catch (err) {
       setStatus(err.response?.data?.message || "❌ Error marking attendance.");
     }
@@ -80,16 +97,18 @@ const Attendance = () => {
     <div style={styles.container}>
       <h2 style={styles.heading}>📍 Attendance</h2>
 
-      <input
-        type="file"
-        accept="image/*"
-        onChange={handleSelfieChange}
-        style={styles.input}
-      />
+      <video ref={videoRef} autoPlay style={styles.video} />
+      <canvas ref={canvasRef} style={{ display: "none" }} />
 
-      {preview && (
+      <div style={styles.buttonRow}>
+        <button style={styles.button} onClick={captureSelfie}>
+          📸 Capture Selfie
+        </button>
+      </div>
+
+      {captured && (
         <div style={styles.previewContainer}>
-          <img src={preview} alt="Selfie Preview" style={styles.previewImage} />
+          <img src={canvasRef.current?.toDataURL()} alt="Captured Selfie" style={styles.previewImage} />
         </div>
       )}
 
@@ -136,10 +155,10 @@ const styles = {
     color: "#2e7d32",
     marginBottom: "20px",
   },
-  input: {
-    display: "block",
-    marginBottom: "10px",
+  video: {
     width: "100%",
+    borderRadius: "12px",
+    marginBottom: "10px",
   },
   previewContainer: {
     display: "flex",
@@ -157,6 +176,7 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     gap: "10px",
+    marginBottom: "10px",
   },
   button: {
     backgroundColor: "#4caf50",
