@@ -278,7 +278,7 @@ app.post("/attendance/:type", verifyToken, upload.single("selfie"), async (req, 
       );
     } else {
       // Office-based employee: Match against geofence zones
-      db.query("SELECT lat, lon, radius FROM geofence_zones WHERE employee_id = ?", [employee_id], async (err, zones) => {
+      db.query("SELECT lat, lon, radius FROM geofence_zones WHERE employee_id = ?", [employeeId], async (err, zones) => {
         if (err) {
           console.error("Geo-fence fetch failed", err);
           return res.status(500).json({ message: "Geo-fence fetch failed" });
